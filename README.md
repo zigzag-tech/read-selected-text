@@ -37,6 +37,7 @@ Create `~/.config/read-selected-text/config.json`:
 ```json
 {
   "voice_id": "YOUR_QWEN_VOICE_ID",
+  "harmony_timeout_seconds": 6,
   "targets": [
     {
       "admit": "http://harmony-host:8799/admit",
@@ -48,8 +49,9 @@ Create `~/.config/read-selected-text/config.json`:
 ```
 
 No hosts, credentials, cloned voices, or model weights are included in this
-repository. The warm local voice is currently the latency-first path; remote
-targets are attempted only if it fails.
+repository. Configured Harmony targets are tried first within one shared,
+bounded deadline. The warm local voice takes over if Harmony is unavailable,
+not resident, or does not begin streaming in time.
 
 ## Test
 

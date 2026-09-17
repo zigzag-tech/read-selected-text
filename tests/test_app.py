@@ -5,6 +5,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).parents[1]
 SERVER = ROOT / "read_selected_text/piper_server.py"
+BACKEND = ROOT / "read_selected_text/backend.py"
 
 
 def load_server_functions():
@@ -33,6 +34,12 @@ class AppTest(unittest.TestCase):
             source = unit.read_text()
             self.assertIn("%h/.local/share/read-selected-text", source)
             self.assertNotIn("/home/", source)
+
+    def test_harmony_precedes_local_fallback_and_reports_backend(self):
+        source = BACKEND.read_text()
+        self.assertLess(source.index("for target in settings"), source.index("if local_speech(text)"))
+        self.assertIn("backend=harmony-qwen", source)
+        self.assertIn("backend=piper-cori", source)
 
 
 if __name__ == "__main__":

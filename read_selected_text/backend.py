@@ -2,6 +2,7 @@
 import json
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -44,17 +45,23 @@ def local_speech(text):
         return play(response, 22050, "Speaking locally — press the shortcut to stop")
 
 
-def remote_speech(target, voice_id, text):
+def remote_speech(target, voice_id, text, deadline):
+    def remaining():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("Harmony attempt deadline expired")
+        return max(0.2, left)
+
     admission = urllib.request.Request(
         target["admit"],
         data=json.dumps({"kind": "qwen", "owner": "read-selected-text"}).encode(),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(admission, timeout=10) as response:
+    with urllib.request.urlopen(admission, timeout=remaining()) as response:
         if not json.load(response).get("granted"):
             return False
-    with urllib.request.urlopen(target["health"], timeout=2) as response:
+    with urllib.request.urlopen(target["health"], timeout=remaining()) as response:
         health = json.load(response)
     resident = health.get("manager", {}).get("resident", health.get("model", []))
     if "qwen" not in resident:
@@ -66,7 +73,7 @@ def remote_speech(target, voice_id, text):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(request, timeout=remaining()) as response:
         rate = int(response.headers.get("X-Sample-Rate", "24000"))
         return play(response, rate, "Speaking through PolyTTS — press the shortcut to stop")
 
@@ -76,18 +83,23 @@ def main():
     if not text:
         return 2
     errors = []
+    settings = config()
+    deadline = time.monotonic() + float(settings.get("harmony_timeout_seconds", 6))
+    for target in settings.get("targets", []):
+        try:
+            if remote_speech(target, settings.get("voice_id", ""), text, deadline):
+                print("backend=harmony-qwen", file=sys.stderr, flush=True)
+                return 0
+        except (OSError, RuntimeError, KeyError, TimeoutError, urllib.error.URLError) as error:
+            errors.append(f"PolyTTS: {error}")
+        if time.monotonic() >= deadline:
+            break
     try:
         if local_speech(text):
+            print("backend=piper-cori", file=sys.stderr, flush=True)
             return 0
     except (OSError, RuntimeError, urllib.error.URLError) as error:
         errors.append(f"local Piper: {error}")
-    settings = config()
-    for target in settings.get("targets", []):
-        try:
-            if remote_speech(target, settings.get("voice_id", ""), text):
-                return 0
-        except (OSError, RuntimeError, KeyError, urllib.error.URLError) as error:
-            errors.append(f"PolyTTS: {error}")
     notify("Every speech backend failed")
     print("\n".join(errors), file=sys.stderr)
     return 1
