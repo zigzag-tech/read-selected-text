@@ -1,0 +1,11 @@
+[Unit]
+Description=Warm Piper voice for Read Selected Text
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/read-selected-text/venv/bin/python %h/.local/share/read-selected-text/app/read_selected_text/piper_server.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

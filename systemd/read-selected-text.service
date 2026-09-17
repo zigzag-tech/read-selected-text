@@ -1,0 +1,13 @@
+[Unit]
+Description=Read Selected Text desktop service
+Wants=read-selected-text-piper.service
+After=read-selected-text-piper.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.local/share/read-selected-text/app/read_selected_text/daemon.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

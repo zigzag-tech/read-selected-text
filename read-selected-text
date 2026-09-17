@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+endpoint="http://127.0.0.1:18788"
+if ! curl --silent --fail --max-time 0.2 "$endpoint" >/dev/null 2>&1; then
+  systemctl --user start read-selected-text.service
+  for _ in {1..80}; do
+    curl --silent --fail --max-time 0.2 "$endpoint" >/dev/null 2>&1 && break
+    sleep 0.1
+  done
+fi
+
+text=$(/usr/bin/wl-paste --primary --no-newline --type text 2>/dev/null || true)
+if [[ -z "${text//[[:space:]]/}" ]]; then
+  notify-send "Read selected text" "No text selected"
+  exit 0
+fi
+
+payload=$(jq -cn --arg text "$text" '{text: $text}')
+status=$(curl --silent --fail -X POST "$endpoint/toggle" \
+  -H 'Content-Type: application/json' -d "$payload" | jq -r .status)
+case "$status" in
+  streaming) notify-send "Read selected text" "Preparing speech — press the shortcut to stop" ;;
+  stopped) notify-send "Read selected text" "Stopped" ;;
+esac
