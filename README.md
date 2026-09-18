@@ -53,6 +53,18 @@ repository. Configured Harmony targets are tried first within one shared,
 bounded deadline. The warm local voice takes over if Harmony is unavailable,
 not resident, or does not begin streaming in time.
 
+## Optional metadata observations
+
+For offline routing experiments, set `READ_SELECTED_TEXT_OBSERVATION_PATH` in
+both user services to a writable JSONL path. Observation is disabled when the
+variable is absent. Records contain bounded timing, attempt, backend, fallback,
+outcome, and cancellation metadata only—never selected text, audio, endpoint
+URLs, credentials, or voice content. The producer buffers in memory while audio
+starts and writes only during cleanup; the file refuses new records at 1 MiB.
+
+This recorder is evidence only. It cannot choose an engine, voice, route,
+fallback, retry, or cancellation action.
+
 ## Test
 
 ```bash

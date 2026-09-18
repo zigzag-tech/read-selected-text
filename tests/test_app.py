@@ -37,7 +37,8 @@ class AppTest(unittest.TestCase):
 
     def test_harmony_precedes_local_fallback_and_reports_backend(self):
         source = BACKEND.read_text()
-        self.assertLess(source.index("for target in settings"), source.index("if local_speech(text)"))
+        self.assertLess(source.index("for index, target in enumerate"),
+                        source.index("if local_speech(text"))
         self.assertIn("backend=harmony-qwen", source)
         self.assertIn("backend=piper-cori", source)
 

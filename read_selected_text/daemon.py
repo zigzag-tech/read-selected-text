@@ -6,18 +6,24 @@ import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from uuid import uuid4
+
+from observation import ObservationRecorder
 
 
 BACKEND = Path(__file__).with_name("backend.py")
 state_lock = threading.Lock()
 player = None
+active_request_id = None
 
 
-def stop():
-    global player
+def stop(recorder=None):
+    global player, active_request_id
     with state_lock:
         proc = player
+        request_id = active_request_id
         player = None
+        active_request_id = None
     if proc and proc.poll() is None:
         try:
             os.killpg(proc.pid, signal.SIGTERM)
@@ -27,6 +33,9 @@ def stop():
             ["systemctl", "--user", "restart", "read-selected-text-piper.service"],
             check=False,
         )
+        if recorder:
+            recorder.request_id = request_id or recorder.request_id
+            recorder.offer("canceled", cancel_cause="shortcut_toggle")
 
 
 def reap(proc):
@@ -38,15 +47,19 @@ def reap(proc):
 
 
 def start(text):
-    global player
+    global player, active_request_id
+    request_id = str(uuid4())
+    environment = os.environ.copy()
+    environment["READ_SELECTED_TEXT_REQUEST_ID"] = request_id
     proc = subprocess.Popen(
         ["/usr/bin/python3", str(BACKEND)], stdin=subprocess.PIPE,
-        text=True, start_new_session=True,
+        text=True, start_new_session=True, env=environment,
     )
     proc.stdin.write(text)
     proc.stdin.close()
     with state_lock:
         player = proc
+        active_request_id = request_id
     threading.Thread(target=reap, args=(proc,), daemon=True).start()
 
 
@@ -58,14 +71,18 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         request = json.loads(self.rfile.read(length) or b"{}")
         if self.path == "/stop":
-            stop()
+            recorder = ObservationRecorder.from_environment()
+            stop(recorder=recorder)
+            recorder.flush()
             result = {"status": "stopped"}
         elif self.path == "/toggle":
             text = request.get("text", "").strip()
             with state_lock:
                 active = player is not None and player.poll() is None
             if active:
-                stop()
+                recorder = ObservationRecorder.from_environment()
+                stop(recorder=recorder)
+                recorder.flush()
                 result = {"status": "stopped"}
             elif text:
                 start(text)
@@ -89,4 +106,5 @@ class Handler(BaseHTTPRequestHandler):
         return
 
 
-ThreadingHTTPServer(("127.0.0.1", 18788), Handler).serve_forever()
+if __name__ == "__main__":
+    ThreadingHTTPServer(("127.0.0.1", 18788), Handler).serve_forever()
